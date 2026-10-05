@@ -51,12 +51,13 @@ Before the first run, pair the remote once under **System Settings → Bluetooth
 shows up as "Shortcut Remote"). If you had XPPen's own driver installed, quit or
 uninstall it — two drivers can't share the remote.
 
-> Actions that synthesize input — `mediaKey` (native volume/brightness HUD) and
-> `keystroke` — need **Accessibility**: add "ACK05 Remote Community Driver" under
-> **System Settings → Privacy & Security → Accessibility**. Launching apps, shell
-> commands and the wheel itself need no permission. macOS asks for **Bluetooth** access
+> Actions that synthesize input — `mediaKey` (native volume/brightness HUD), `keystroke`
+> and modifier holding — need **Accessibility** (or **Device Control and Data Access** on macOS 27+):
+> add "ACK05 Remote Community Driver" under **System Settings → Privacy & Security**. Launching apps,
+> shell commands and the wheel itself need no permission. macOS asks for **Bluetooth** access
 > the first time; allow it. Run `./make-signing-cert.sh` once so the Accessibility grant
-> survives rebuilds (it installs a local self-signed signing certificate — see the script).
+> survives rebuilds (it installs a local self-signed signing certificate). See
+> [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) for details and troubleshooting.
 
 ## Configure
 
@@ -104,7 +105,7 @@ launchctl bootout gui/$(id -u)/io.github.livenl.ack05d
 | --- | --- | --- |
 | `shell` | Run a shell command | `command`, `label` |
 | `mediaKey` | Post a system media key (native HUD) | `key` — `volume_up/down`, `mute`, `brightness_up/down`, `play_pause`, `next`, `previous` |
-| `keystroke` | Synthesize a key chord | `keystroke` — e.g. `cmd+=`, `shift+cmd+4`; modifiers `cmd`/`opt`/`ctrl`/`shift`, keys a–z, 0–9, `=`, `-`, `[`, `]`, `space`, `return`, `tab`, `escape`, `delete`, arrows (US-ANSI key codes) |
+| `keystroke` | Synthesize a key chord or modifier key | `keystroke` — modifier keys (`shift`, `opt`/`alt`, `cmd`, `ctrl`, `capslock`, `fn`, right-side variants `rshift`, `ropt`, etc.) stay held while the remote button is pressed; chords e.g. `cmd+=`, `shift+cmd+4`; keys a–z, 0–9, symbols (`=`, `-`, `[`, `]`, `.`, `,`, `/`, `\`, `;`, `'`, `` ` ``), `space`, `return`, `tab`, `escape`, `delete`, arrows, `f1`–`f12`, `pageup`/`pagedown`/`home`/`end` |
 | `battery` | Show the remote's battery level in the overlay | `label` (optional) |
 | `wheelModeCycle` | Advance to the next wheel mode | — |
 | `none` | Explicitly unbound | — |
@@ -133,8 +134,9 @@ the link drops. Set any to `""` to suppress; defaults are `"ACK05 connecting…"
 ```text
 ack05d                    run with ~/.config/ack05d/config.json
 ack05d --config PATH      use another config file
-ack05d --identify         print each button/wheel event by name; runs no actions
-ack05d --debug            log every wheel event and battery heartbeat
+ack05d --identify         print each button/wheel event by name; runs no actions (includes live accessibility check)
+ack05d --check-accessibility  check accessibility & event tap access; poll live until granted
+ack05d --debug            log every button event, wheel event, and battery heartbeat
 ```
 
 `ACK05D_IDENTIFY_OVERLAY=~/.local/bin/hud ack05d --identify` also shows each name on screen.
@@ -160,8 +162,9 @@ ack05d --debug            log every wheel event and battery heartbeat
   power-up; the driver rescans automatically).
 - **Keys type Ctrl+Z / Ctrl+S into apps**: the driver isn't running — in its factory mode
   the remote sends plain keystrokes. Check the log and restart the agent.
-- **Volume/zoom does nothing**: the app isn't Accessibility-trusted, or you rebuilt
-  without `make-signing-cert.sh` and the grant was reset — re-add it.
+- **Volume/zoom does nothing or modifiers don't apply**: the app isn't Accessibility-trusted,
+  or you rebuilt without `make-signing-cert.sh` and the grant was invalidated. See
+  [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) for quick reset steps and permanent certificate setup.
 
 Reporting a bug? Include your macOS version, the hardware revision if you know it, and
 the last ~50 lines of the log.

@@ -3,14 +3,17 @@ import ApplicationServices
 
 // ack05d — userspace driver for the XPPen ACK05 shortcut remote over Bluetooth LE.
 //
-//   ack05d              run the driver using the config file
-//   ack05d --identify   print every button/wheel event by name; no actions run
-//   ack05d --config P   use config file at path P
+//   ack05d                   run the driver using the config file
+//   ack05d --identify        print every button/wheel event by name; no actions run
+//   ack05d --check-accessibility  check accessibility & event tap access; poll live until granted
+//   ack05d --debug           log every button event, wheel event, and battery heartbeat
+//   ack05d --config P        use config file at path P
 //
 // See README.md for the protocol and config format.
 
 let args = CommandLine.arguments
 let identifyMode = args.contains("--identify")
+let checkAccessibilityMode = args.contains("--check-accessibility")
 let debug = args.contains("--debug") || ProcessInfo.processInfo.environment["ACK05D_DEBUG"] != nil
 
 func configURL() -> URL {
@@ -60,8 +63,10 @@ var batteryProvider: (() -> Int?)?
 func loadConfig() {
     do {
         let config = try Config.load(from: configURL())
-        let r = ActionRunner(config: config)
+        let r = ActionRunner(config: config, debug: debug)
+        r.onLog = log
         r.batteryProvider = batteryProvider
+        runner?.resetAllHeld()
         runner = r
         connectingLabel = config.connectingLabel ?? "ACK05 connecting…"
         connectedLabel = config.connectedLabel ?? "ACK05 ready"
@@ -93,16 +98,43 @@ func startConfigWatcher() {
     }
 }
 
+// Signal handling to guarantee no modifier keys are left held on exit.
+signal(SIGINT, SIG_IGN)
+signal(SIGTERM, SIG_IGN)
+let sigintSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+sigintSource.setEventHandler {
+    runner?.resetAllHeld()
+    exit(0)
+}
+sigintSource.resume()
+let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+sigtermSource.setEventHandler {
+    runner?.resetAllHeld()
+    exit(0)
+}
+sigtermSource.resume()
+
+AccessibilityDetector.shared.onLog = log
+AccessibilityDetector.shared.modifierFlagsProvider = { runner?.currentModifierFlags ?? [] }
+
+if checkAccessibilityMode {
+    AccessibilityDetector.shared.startLiveDetection {
+        log("accessibility check passed.")
+        exit(0)
+    }
+    RunLoop.main.run()
+}
+
 if identifyMode {
     log("identify mode — press buttons; nothing is executed")
+    AccessibilityDetector.shared.startLiveDetection()
 } else {
     loadConfig()
     startConfigWatcher()
+    if !AccessibilityDetector.shared.installEventTap() {
+        log("accessibility trusted: \(AXIsProcessTrusted())")
+    }
 }
-
-// mediaKey and keystroke actions need Accessibility. A launchd agent can't surface the grant
-// dialog, so the user adds the app bundle manually (see README / install.sh output).
-log("accessibility trusted: \(AXIsProcessTrusted())")
 
 let transport = Transport()
 // Wire the battery source now that the transport exists, onto the current runner and
@@ -116,6 +148,7 @@ transport.onConnecting = {
     runner?.announce(connectingLabel, 12)
 }
 transport.onReady = { battery in
+    runner?.resetAllHeld()
     let quiet = quietReconnect()
     log("remote ready\(battery.map { " (\($0)%)" } ?? "")\(quiet ? " (quiet reconnect, no overlay)" : "")")
     lastContact = Date()
@@ -124,6 +157,7 @@ transport.onReady = { battery in
     runner?.announce(connectedLabel + suffix, 1.5)
 }
 transport.onLost = {
+    runner?.resetAllHeld()
     let quiet = quietReconnect()
     lastContact = Date()
     if !identifyMode, !disconnectedLabel.isEmpty, !quiet { runner?.announce(disconnectedLabel) }
@@ -132,10 +166,16 @@ transport.onFrame = { data in
     for event in decoder.decode(data) {
         switch event {
         case .press(let button):
-            if identifyMode || runner == nil { log("PRESS \(button.rawValue)"); showIdentify(button.rawValue) }
-            else { runner?.handlePress(button) }
-        case .release:
-            break
+            if identifyMode || runner == nil {
+                log("PRESS \(button.rawValue)")
+                showIdentify(button.rawValue)
+            } else {
+                if debug { log("PRESS \(button.rawValue)") }
+                runner?.handlePress(button)
+            }
+        case .release(let button):
+            if debug { log("RELEASE \(button.rawValue)") }
+            if !identifyMode { runner?.handleRelease(button) }
         case .wheel(let direction):
             if identifyMode || runner == nil { log(direction.rawValue); showIdentify(direction.rawValue) }
             else {
@@ -150,6 +190,7 @@ transport.onFrame = { data in
                 log("battery \(percent)%\(charging ? " (charging)" : "")")
             }
         case .reconnect:
+            runner?.resetAllHeld()
             log("device reconnect")
         }
     }

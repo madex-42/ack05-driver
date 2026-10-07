@@ -105,10 +105,16 @@ launchctl bootout gui/$(id -u)/io.github.livenl.ack05d
 | --- | --- | --- |
 | `shell` | Run a shell command | `command`, `label` |
 | `mediaKey` | Post a system media key (native HUD) | `key` — `volume_up/down`, `mute`, `brightness_up/down`, `play_pause`, `next`, `previous` |
-| `keystroke` | Synthesize a key chord or modifier key | `keystroke` — modifier keys (`shift`, `opt`/`alt`, `cmd`, `ctrl`, `capslock`, `fn`, right-side variants `rshift`, `ropt`, etc.) stay held while the remote button is pressed; chords e.g. `cmd+=`, `shift+cmd+4`; keys a–z, 0–9, symbols (`=`, `-`, `[`, `]`, `.`, `,`, `/`, `\`, `;`, `'`, `` ` ``), `space`, `return`, `tab`, `escape`, `delete`, arrows, `f1`–`f12`, `pageup`/`pagedown`/`home`/`end` |
+| `keystroke` | Synthesize a key chord or modifier key | `keystroke` — modifier keys (`shift`, `opt`/`alt`, `cmd`, `ctrl`, right-side variants `rshift`, `ropt`, etc.) stay held while the remote button is pressed; chords e.g. `cmd+=`, `shift+cmd+4`, `cmd++` (cmd and the plus key); keys a–z, 0–9, symbols (`=`, `-`, `[`, `]`, `.`, `,`, `/`, `\`, `;`, `'`, `` ` ``), `space`, `return`, `tab`, `escape`, `delete`, arrows, `f1`–`f12`, `pageup`/`pagedown`/`home`/`end` |
 | `battery` | Show the remote's battery level in the overlay | `label` (optional) |
 | `wheelModeCycle` | Advance to the next wheel mode | — |
 | `none` | Explicitly unbound | — |
+
+A `keystroke` on a **button** is held while the button is held (a chord is pressed on press and
+released on release; a modifier such as `shift` stays down). While a modifier is held on the remote
+it is also merged into input from your Mac's keyboard, mouse and trackpad, and into chords fired
+by the wheel (`shift` held + wheel `cmd+=` sends `shift+cmd+=`). On the **wheel** a keystroke is a
+single tap; modifier-only keystrokes have no effect there.
 
 `overlayCommand` is any program called as `<cmd> <label> <seconds>`; the bundled `hud`
 shows a single, fixed-width overlay. Add `"silent": true` to an action whose command

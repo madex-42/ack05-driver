@@ -15,7 +15,7 @@ enum WheelDirection: String {
     case ccw = "WHEEL_CCW"
 }
 
-enum DeviceEvent {
+enum DeviceEvent: Equatable {
     case press(Button)
     case release(Button)
     case wheel(WheelDirection)

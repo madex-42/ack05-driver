@@ -4,41 +4,33 @@ import CoreGraphics
 /// Synthesises a key chord (e.g. "cmd+=", "shift+cmd+4") or modifier keys (e.g. "shift", "option")
 /// as CGEvents. Needs the daemon to be Accessibility-trusted, same as MediaKey.
 struct KeyStroke {
+    struct Modifier: Equatable {
+        let code: CGKeyCode
+        let flag: CGEventFlags
+    }
+
     enum Kind {
-        case modifier(keys: [CGKeyCode])
+        case modifier([Modifier])
         case key(code: CGKeyCode, flags: CGEventFlags)
     }
 
     let kind: Kind
 
-    /// Parse "shift", "cmd", "cmd+=", "shift+cmd+4" style strings.
-    /// Modifiers: cmd/command, opt/alt/option, ctrl/control, shift, capslock, fn (and right-side variants).
-    /// If only modifiers are given, it represents modifier hold/release. If a regular key is included,
-    /// it represents that key with the specified modifier chord.
-    /// Returns nil on an unknown key.
+    /// Parse "shift", "cmd", "cmd+=", "shift+cmd+4", "cmd++" style strings.
+    /// Modifiers: cmd/command, opt/alt/option, ctrl/control, shift (and left/right variants).
+    /// If only modifiers are given, it represents a modifier hold/release. If a regular key is
+    /// included, it represents that key with the specified modifier chord.
+    /// Returns nil on an unknown or malformed spec.
     init?(_ spec: String) {
-        let trimmed = spec.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
+        guard let tokens = Self.tokenize(spec) else { return nil }
 
-        var rawTokens: [String]
-        if trimmed == "+" {
-            rawTokens = ["+"]
-        } else {
-            rawTokens = trimmed.split(separator: "+").map {
-                $0.trimmingCharacters(in: .whitespaces).lowercased()
-            }
-            if trimmed.hasSuffix("+") && !trimmed.hasSuffix("++") {
-                rawTokens.append("+")
-            }
-        }
-
-        var modifierCodes: [CGKeyCode] = []
+        var modifiers: [Modifier] = []
         var flags: CGEventFlags = []
         var keyToken: String?
 
-        for t in rawTokens {
+        for t in tokens {
             if let mod = Self.modifierMap[t] {
-                modifierCodes.append(mod.code)
+                modifiers.append(mod)
                 flags.insert(mod.flag)
             } else if keyToken == nil {
                 keyToken = t
@@ -50,19 +42,57 @@ struct KeyStroke {
         if let token = keyToken {
             guard let code = Self.keyCodes[token] else { return nil }
             self.kind = .key(code: code, flags: flags)
-        } else if !modifierCodes.isEmpty {
-            self.kind = .modifier(keys: modifierCodes)
+        } else if !modifiers.isEmpty {
+            self.kind = .modifier(modifiers)
         } else {
             return nil
         }
     }
 
+    /// Splits on `+`, treating a trailing `+` ("cmd++", "+") as the plus key itself.
+    /// A dangling single `+` ("shift+") is malformed.
+    static func tokenize(_ spec: String) -> [String]? {
+        var body = spec.trimmingCharacters(in: .whitespaces)
+        guard !body.isEmpty else { return nil }
+        if body == "+" { return ["+"] }
+
+        var plusKey = false
+        if body.hasSuffix("++") {
+            body.removeLast(2)
+            plusKey = true
+        } else if body.hasSuffix("+") {
+            return nil
+        }
+
+        var tokens = body.split(separator: "+", omittingEmptySubsequences: false).map {
+            $0.trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        if tokens.contains(where: \.isEmpty) { return nil }
+        if plusKey { tokens.append("+") }
+        return tokens
+    }
+
+    var isModifierOnly: Bool {
+        if case .modifier = kind { return true }
+        return false
+    }
+
+    /// Flags contributed while this stroke is held (modifier-only strokes; chords are momentary).
+    var heldFlags: CGEventFlags {
+        guard case .modifier(let mods) = kind else { return [] }
+        return mods.reduce(into: CGEventFlags()) { $0.insert($1.flag) }
+    }
+
     func postDown() {
         let src = CGEventSource(stateID: .hidSystemState)
         switch kind {
-        case .modifier(let keys):
-            for key in keys {
-                CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: true)?.post(tap: .cghidEventTap)
+        case .modifier(let mods):
+            var flags: CGEventFlags = []
+            for mod in mods {
+                flags.insert(mod.flag)
+                guard let e = CGEvent(keyboardEventSource: src, virtualKey: mod.code, keyDown: true) else { continue }
+                e.flags.formUnion(flags)
+                e.post(tap: .cghidEventTap)
             }
         case .key(let code, let flags):
             guard let down = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true) else { return }
@@ -74,9 +104,11 @@ struct KeyStroke {
     func postUp() {
         let src = CGEventSource(stateID: .hidSystemState)
         switch kind {
-        case .modifier(let keys):
-            for key in keys.reversed() {
-                CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: false)?.post(tap: .cghidEventTap)
+        case .modifier(let mods):
+            for mod in mods.reversed() {
+                guard let e = CGEvent(keyboardEventSource: src, virtualKey: mod.code, keyDown: false) else { continue }
+                e.flags.remove(mod.flag)
+                e.post(tap: .cghidEventTap)
             }
         case .key(let code, let flags):
             guard let up = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false) else { return }
@@ -90,47 +122,24 @@ struct KeyStroke {
         postUp()
     }
 
-    /// Backwards-compatible alias for instantaneous trigger (e.g. wheel ticks).
-    func post() {
-        postTap()
-    }
-
-    private static let modifierMap: [String: (code: CGKeyCode, flag: CGEventFlags)] = [
-        "cmd": (55, .maskCommand),
-        "command": (55, .maskCommand),
-        "lcmd": (55, .maskCommand),
-        "cmd_left": (55, .maskCommand),
-        "rcmd": (54, .maskCommand),
-        "cmd_right": (54, .maskCommand),
-
-        "shift": (56, .maskShift),
-        "lshift": (56, .maskShift),
-        "shift_left": (56, .maskShift),
-        "rshift": (60, .maskShift),
-        "shift_right": (60, .maskShift),
-
-        "opt": (58, .maskAlternate),
-        "option": (58, .maskAlternate),
-        "alt": (58, .maskAlternate),
-        "lopt": (58, .maskAlternate),
-        "option_left": (58, .maskAlternate),
-        "alt_left": (58, .maskAlternate),
-        "ropt": (61, .maskAlternate),
-        "option_right": (61, .maskAlternate),
-        "alt_right": (61, .maskAlternate),
-
-        "ctrl": (59, .maskControl),
-        "control": (59, .maskControl),
-        "lctrl": (59, .maskControl),
-        "control_left": (59, .maskControl),
-        "rctrl": (62, .maskControl),
-        "control_right": (62, .maskControl),
-
-        "capslock": (57, .maskAlphaShift),
-        "caps_lock": (57, .maskAlphaShift),
-        "fn": (63, .maskSecondaryFn),
-        "function": (63, .maskSecondaryFn),
-    ]
+    // caps lock and fn are intentionally unsupported: key code 57 toggles caps lock rather than
+    // holding it, and a synthetic fn has no useful effect.
+    private static let modifierMap: [String: Modifier] = {
+        let cmdL = Modifier(code: 55, flag: .maskCommand), cmdR = Modifier(code: 54, flag: .maskCommand)
+        let shiftL = Modifier(code: 56, flag: .maskShift), shiftR = Modifier(code: 60, flag: .maskShift)
+        let optL = Modifier(code: 58, flag: .maskAlternate), optR = Modifier(code: 61, flag: .maskAlternate)
+        let ctrlL = Modifier(code: 59, flag: .maskControl), ctrlR = Modifier(code: 62, flag: .maskControl)
+        return [
+            "cmd": cmdL, "command": cmdL, "lcmd": cmdL, "cmd_left": cmdL,
+            "rcmd": cmdR, "cmd_right": cmdR,
+            "shift": shiftL, "lshift": shiftL, "shift_left": shiftL,
+            "rshift": shiftR, "shift_right": shiftR,
+            "opt": optL, "option": optL, "alt": optL, "lopt": optL, "option_left": optL, "alt_left": optL,
+            "ropt": optR, "option_right": optR, "alt_right": optR,
+            "ctrl": ctrlL, "control": ctrlL, "lctrl": ctrlL, "control_left": ctrlL,
+            "rctrl": ctrlR, "control_right": ctrlR,
+        ]
+    }()
 
     // ANSI virtual key codes (Carbon kVK_*).
     private static let keyCodes: [String: CGKeyCode] = [
@@ -160,16 +169,4 @@ struct KeyStroke {
         "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
         "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111,
     ]
-
-    static func flagForModifierKey(_ code: CGKeyCode) -> CGEventFlags? {
-        switch code {
-        case 56, 60: return .maskShift
-        case 55, 54: return .maskCommand
-        case 58, 61: return .maskAlternate
-        case 59, 62: return .maskControl
-        case 57: return .maskAlphaShift
-        case 63: return .maskSecondaryFn
-        default: return nil
-        }
-    }
 }

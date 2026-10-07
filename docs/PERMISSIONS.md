@@ -11,6 +11,10 @@ This document explains how macOS permissions work for `ack05d`, how cross-device
 - **`mediaKey`**: Injecting native volume, brightness, or media playback HUD events.
 - **Cross-device modifier injection**: When you hold a modifier on the ACK05 remote and type on your native MacBook keyboard, `ack05d` uses a system **Event Tap** (`CGEventTap`) to intercept physical keystrokes in flight and merge the held modifier (e.g. Shift + 1 = `!`).
 
+> macOS may also list the driver under **Input Monitoring** (the log's `listenAccess` value). If modifiers don't apply after granting Accessibility, enable it there too.
+>
+> The daemon keeps polling for the permission after launch, so a grant takes effect within a couple of seconds without a restart.
+
 Launching apps via `shell`, overlay alerts, and reading wheel rotation require no special permissions.
 
 ---
@@ -33,7 +37,7 @@ When you build `ack05d` using `./install.sh` without a persistent signing certif
 3. Every time you recompile or update the code, a new binary with a **new hash** is generated.
 4. **The Gotcha**: In System Settings, the toggle will still appear **ON** (because the bundle name matches), but macOS internally checks the binary hash at runtime. Because the hash changed, macOS silently revokes access, and `~/Library/Logs/ack05d.log` reports:
    ```text
-   ack05d: permissions: axTrusted=false, listenAccess=false, postAccess=false
+   12:00:00 ack05d: permissions: axTrusted=false, listenAccess=false, postAccess=false
    ```
 
 ---
@@ -64,7 +68,7 @@ If you rebuild without a certificate and keystrokes or modifiers stop working:
    ```
 2. Open **System Settings → Privacy & Security → Device Control and Data Access** (or **Accessibility**).
 3. If **ACK05 Remote Community Driver** is still listed, remove it (click `-` or right-click to delete).
-4. Click **`+`**, select `/Users/Vitalii/Applications/ACK05 Remote Community Driver.app`, and turn the toggle **ON**.
+4. Click **`+`**, select `~/Applications/ACK05 Remote Community Driver.app`, and turn the toggle **ON**.
 
 ---
 
@@ -81,10 +85,11 @@ tail -f ~/Library/Logs/ack05d.log
 ```
 Healthy startup with permissions granted:
 ```text
-ack05d: loaded config from ~/.config/ack05d/config.json
-ack05d: successfully installed system event tap for cross-device modifiers!
-ack05d: connected
-ack05d: remote ready (NN%)
+12:00:00 ack05d: loaded config from ~/.config/ack05d/config.json
+12:00:00 ack05d: permissions: axTrusted=true, listenAccess=true, postAccess=true
+12:00:00 ack05d: event tap installed (cross-device modifiers active)
+12:00:01 ack05d: connected
+12:00:02 ack05d: remote ready (NN%)
 ```
 
 Restart the background daemon:

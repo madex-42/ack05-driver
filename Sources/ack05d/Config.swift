@@ -4,9 +4,21 @@ import Foundation
 /// `~/.config/ack05d/config.json`). Kept entirely separate from the binary so the
 /// generic driver can be published while personal mappings live in the user's dotfiles.
 struct Config: Decodable {
-    /// Optional shell command run for every event, receiving a label as $1. Used for an
-    /// on-screen overlay; omit to stay silent. Example: "/Users/me/.local/bin/hud".
-    var overlayCommand: String?
+    /// Optional structured overlay configuration.
+    var overlay: OverlayConfig?
+
+    struct OverlayConfig: Decodable, Equatable {
+        var command: String?
+        var textSize: Double?
+        var padding: Double?
+        var position: PositionConfig?
+        var durationMs: Double?
+
+        struct PositionConfig: Decodable, Equatable {
+            var x: Double?
+            var y: Double?
+        }
+    }
 
     /// Overlay shown while a connection attempt is in progress (startup or after a
     /// drop); replaced by connectedLabel once ready. Set to "" to suppress. Defaults to
@@ -44,7 +56,7 @@ struct Config: Decodable {
         var key: String?
         /// keystroke: a key chord to synthesize, e.g. "cmd+=" or "shift+cmd+4".
         var keystroke: String?
-        /// overlay label shown when overlayCommand is set (defaults to the button name).
+        /// overlay label shown when overlay is configured (defaults to the button name).
         var label: String?
         /// suppress the daemon's own overlay for this action — e.g. when the invoked
         /// command draws its own, smarter overlay (a toggle showing on/off state).

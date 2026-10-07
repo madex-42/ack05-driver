@@ -12,9 +12,23 @@ set -eu
 
 NAME="ack05d-signing"
 
-if security find-identity -p codesigning -v 2>/dev/null | grep -q "$NAME"; then
-    echo "identity '$NAME' already exists — nothing to do"
-    exit 0
+if security find-identity -p codesigning -v 2>/dev/null | grep -q "$NAME" || \
+   security find-certificate -c "$NAME" "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1; then
+    echo "Warning: A certificate or identity named '$NAME' already exists in your keychain."
+    echo "Creating a new certificate without removing the old one will cause ambiguous certificate"
+    echo "conflicts when codesign runs during ./install.sh."
+    printf "Do you want to delete the existing '%s' certificate and recreate it? [y/N]: " "$NAME"
+    read -r reply
+    case "$reply" in
+        [yY]|[yY][eE][sS])
+            echo "==> removing existing certificate '$NAME' from login keychain"
+            security delete-certificate -c "$NAME" "$HOME/Library/Keychains/login.keychain-db" 2>/dev/null || true
+            ;;
+        *)
+            echo "Aborted. Keeping existing certificate."
+            exit 0
+            ;;
+    esac
 fi
 
 TMP="$(mktemp -d)"

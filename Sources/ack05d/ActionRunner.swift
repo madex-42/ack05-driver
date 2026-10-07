@@ -105,9 +105,29 @@ final class ActionRunner {
         }
     }
 
-    private func overlay(_ label: String, _ seconds: Double = 0.8) {
-        guard let cmd = config.overlayCommand else { return }
-        shell("\(cmd) \(shellQuote(label)) \(seconds)")
+    private func overlay(_ label: String, _ seconds: Double? = nil) {
+        guard let cmd = config.overlay?.command, !cmd.isEmpty else { return }
+
+        var args: [String] = [shellQuote(label)]
+        if let s = seconds {
+            args.append("--duration-ms \(Int(s * 1000))")
+        } else if let ms = config.overlay?.durationMs {
+            args.append("--duration-ms \(Int(ms))")
+        }
+        if let size = config.overlay?.textSize {
+            args.append("--text-size \(size)")
+        }
+        if let pad = config.overlay?.padding {
+            args.append("--padding \(pad)")
+        }
+        if let x = config.overlay?.position?.x {
+            args.append("--x-percent \(x)")
+        }
+        if let y = config.overlay?.position?.y {
+            args.append("--y-percent \(y)")
+        }
+
+        shell("\(cmd) \(args.joined(separator: " "))")
     }
 
     /// Config mistakes repeat on every press or wheel tick; report each once per config load.

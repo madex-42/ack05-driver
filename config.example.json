@@ -1,5 +1,11 @@
 {
-  "overlayCommand": "~/.local/bin/hud",
+  "overlay": {
+    "command": "~/.local/bin/hud",
+    "textSize": 22,
+    "padding": 20,
+    "position": { "x": 50, "y": 18 },
+    "durationMs": 800
+  },
   "connectingLabel": "ACK05 connecting…",
   "connectedLabel": "ACK05 ready",
   "disconnectedLabel": "",

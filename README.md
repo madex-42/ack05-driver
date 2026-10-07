@@ -62,7 +62,8 @@ uninstall it — two drivers can't share the remote.
 ## Configure
 
 Your mapping lives in `~/.config/ack05d/config.json` (seeded from
-[`config.example.json`](config.example.json)). Learn which physical key is which — stop
+[`config.example.json`](config.example.json); see [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
+for a comprehensive reference covering all options). Learn which physical key is which — stop
 the agent first, or every identify press also fires your configured action:
 
 ```sh
@@ -79,7 +80,13 @@ launchctl bootout gui/$(id -u)/io.github.livenl.ack05d
 
 ```json
 {
-  "overlayCommand": "~/.local/bin/hud",
+  "overlay": {
+    "command": "~/.local/bin/hud",
+    "textSize": 22,
+    "padding": 20,
+    "position": { "x": 50, "y": 18 },
+    "durationMs": 800
+  },
   "buttons": {
     "BTN_1": { "type": "shell", "command": "open -a Safari", "label": "Safari" },
     "DIAL":  { "type": "wheelModeCycle" }
@@ -116,10 +123,14 @@ it is also merged into input from your Mac's keyboard, mouse and trackpad, and i
 by the wheel (`shift` held + wheel `cmd+=` sends `shift+cmd+=`). On the **wheel** a keystroke is a
 single tap; modifier-only keystrokes have no effect there.
 
-`overlayCommand` is any program called as `<cmd> <label> <seconds>`; the bundled `hud`
-shows a single, fixed-width overlay. Add `"silent": true` to an action whose command
-draws its own overlay. Edit the file and the daemon hot-reloads it within ~1.5s — no
-restart needed.
+`overlay` configures the on-screen heads-up display:
+- `command`: executable path (e.g. `~/.local/bin/hud`).
+- `textSize`: font size in points (default `22`).
+- `padding`: uniform padding around text (default `20`).
+- `position`: screen position percentages `{ "x": 50, "y": 18 }` relative to usable screen area (`visibleFrame`). It excludes the macOS Dock and main menu bar regardless of Dock position, edge, and size, and will not overlap the Dock.
+- `durationMs`: overlay display duration in milliseconds (default `800`).
+
+Add `"silent": true` to an action whose command draws its own overlay. Edit the file and the daemon hot-reloads it within ~1.5s — no restart needed.
 
 `connectingLabel` shows once the Bluetooth link is up and the handshake is running, and
 is replaced by `connectedLabel` (with the battery level) the moment the remote is ready —

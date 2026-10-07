@@ -43,7 +43,7 @@ echo "==> signing (identity: $IDENTITY)"
 codesign --force --sign "$IDENTITY" --identifier "$LABEL" "$APP_DIR"
 
 echo "==> building overlay helper (hud)"
-# Optional on-screen HUD used by the example config's overlayCommand. Standalone,
+# Optional on-screen HUD used by the example config's overlay setting. Standalone,
 # needs no permissions. Installed to ~/.local/bin (created if missing).
 BIN_HOME="$HOME/.local/bin"
 mkdir -p "$BIN_HOME"
@@ -58,7 +58,7 @@ esac
 echo "==> config"
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
-    # Seed from the example, pointing overlayCommand at the hud just built.
+    # Seed from the example, pointing overlay at the hud just built.
     cp "$REPO/config.example.json" "$CONFIG_DIR/config.json"
     echo "    created $CONFIG_DIR/config.json from config.example.json"
 else

@@ -24,8 +24,12 @@ echo "==> generating certificate ($NAME, valid 10 years)"
 openssl req -x509 -newkey rsa:2048 -keyout "$TMP/key.pem" -out "$TMP/cert.pem" \
     -days 3650 -nodes -subj "/CN=$NAME" \
     -addext "keyUsage=digitalSignature" -addext "extendedKeyUsage=codeSigning"
+LEGACY_FLAG=""
+if openssl pkcs12 -help 2>&1 | grep -q -- "-legacy"; then
+    LEGACY_FLAG="-legacy"
+fi
 openssl pkcs12 -export -out "$TMP/cert.p12" -inkey "$TMP/key.pem" \
-    -in "$TMP/cert.pem" -passout pass:temp
+    -in "$TMP/cert.pem" -passout pass:temp $LEGACY_FLAG
 
 echo "==> importing into login keychain (codesign pre-authorized)"
 security import "$TMP/cert.p12" -k "$HOME/Library/Keychains/login.keychain-db" \

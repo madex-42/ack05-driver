@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ack05d}",
+            "name": "Debug ack05d",
+            "target": "ack05d",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ack05d"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ack05d}",
+            "name": "Release ack05d",
+            "target": "ack05d",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ack05d"
+        }
+    ]
+}
